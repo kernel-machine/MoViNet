@@ -1,5 +1,6 @@
 import os
 import argparse
+from keras.src.callbacks import callback
 import tensorflow as tf
 import random
 from official.projects.movinet.modeling import movinet
@@ -61,7 +62,7 @@ parser.add_argument("--resolution", type=int, default=224)
 args = parser.parse_args()
 
 random.seed(1234)
-
+mirrored_strategy = tf.distribute.MirroredStrategy()
 train_fg = FrameGenerator(os.path.join(args.dataset,"train"), resolution=args.resolution)
 val_fg = FrameGenerator(os.path.join(args.dataset,"val"), resolution=args.resolution)
 output_signature = (tf.TensorSpec(shape = (None, None, None, 3), dtype = tf.float32),
@@ -81,9 +82,7 @@ tf.keras.backend.clear_session()
 
 # Create backbone and model.
 backbone = movinet.Movinet(
-    model_id='a0',
-    causal=False,
-    use_external_states=False,
+    model_id='a0'
 )
 model = movinet_model.MovinetClassifier(
     backbone, num_classes=1, output_states=False)
@@ -92,6 +91,8 @@ model.build([args.batch_size, args.window_size, args.resolution, args.resolution
 loss_obj =  tf.keras.losses.BinaryCrossentropy(from_logits=True)
 optimizer = tf.keras.optimizers.Adam(learning_rate=args.lr)
 model.compile(loss=loss_obj, optimizer='adam', metrics=['accuracy'])
+tensorboard_callback = tf.keras.callbacks.TensorBoard(log_dir="runs", histogram_freq=1)
 results = model.fit(train_ds,
                     validation_data=val_ds,
-                    epochs=args.epochs)
+                    epochs=args.epochs,
+                    )
